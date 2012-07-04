@@ -1,0 +1,58 @@
+#!/bin/sh
+
+# runasweb
+# author: [Donald L. Merand](http://donaldmerand.com)
+#
+# Shell script to run any parameters as the web user by storing them in a .txt
+# file, temporarily creating a PHP file that executes the contents of that .txt
+# file, and then removing all traces of either file. It is intended to be run
+# from the command line of the web server itself.
+#
+# It solves the problem of not being able to execute scripts as the web user
+# when logged in to the web host. This is pretty common in shared web hosting
+# environments.
+
+
+# setup variables
+# whatever is passed as a parameter gets passed to the PHP script to be run as web
+CMD="$@"
+# web root directory
+HTMLDIR="$HOME/web_root"
+# what do you want to name the PHP/PHP input files?
+PHPFILE="cmd.php"
+PHPINPUTFILE="cmd$RANDOM.txt"
+# external URL for this server
+URL="http://your.website.com"
+
+
+# show help if no input
+if [ -z "$CMD" ]; then
+	echo "USAGE: runasweb.sh COMMANDS"
+	exit 1
+fi
+
+
+# create cmd.php from right here
+cat > "$HTMLDIR/$PHPFILE" <<CMDPHP
+<?php 
+
+\$command = file_get_contents("$HTMLDIR/$PHPINPUTFILE");
+
+if (\$command) {
+	system(\$command);
+}
+
+?>
+CMDPHP
+
+# cmd.php expects a text file full-o-commands to run
+echo "$CMD" > "$HTMLDIR/$PHPINPUTFILE"
+# make sure the permissions are correct on that PHP file
+/bin/chmod 777 "$HTMLDIR/$PHPFILE"
+/bin/chmod 777 "$HTMLDIR/$PHPINPUTFILE"
+# ask the webserver to run the command
+UA="Mozilla/4.0 (compatible; MSIE 5.01; Windows NT 5.0)"
+/usr/local/bin/curl --user-agent "$UA" "$URL/$PHPFILE"
+# now (quickly!) remove the mildly dangerous file from the web root
+/bin/rm "$HTMLDIR/$PHPFILE"
+/bin/rm "$HTMLDIR/$PHPINPUTFILE"
